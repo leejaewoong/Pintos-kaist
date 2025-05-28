@@ -16,14 +16,11 @@
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 
-/* System call.
+/* 시스템 콜 처리.
  *
- * Previously system call services was handled by the interrupt handler
- * (e.g. int 0x80 in linux). However, in x86-64, the manufacturer supplies
- * efficient path for requesting the system call, the `syscall` instruction.
- *
- * The syscall instruction works by reading the values from the the Model
- * Specific Register (MSR). For the details, see the manual. */
+ * 예전에는 인터럽트 핸들러(예: 리눅스의 int 0x80)가 시스템 콜을 담당했지만,
+ * x86-64에서는 `syscall` 명령을 통해 보다 효율적으로 요청할 수 있다.
+ * 이 명령은 모델 특정 레지스터(MSR)의 값을 읽어 동작하니, 자세한 내용은 매뉴얼을 참고. */
 
 #define MSR_STAR 0xc0000081         /* Segment selector msr */
 #define MSR_LSTAR 0xc0000082        /* Long mode SYSCALL target */
@@ -36,9 +33,9 @@ syscall_init (void) {
 			((uint64_t)SEL_KCSEG) << 32);
 	write_msr(MSR_LSTAR, (uint64_t) syscall_entry);	
 
-	/* The interrupt service rountine should not serve any interrupts
-	 * until the syscall_entry swaps the userland stack to the kernel
-	 * mode stack. Therefore, we masked the FLAG_FL. */
+        /* syscall_entry가 사용자 스택을 커널 스택으로 바꿀 때까지는
+         * 인터럽트 핸들러가 다른 인터럽트를 처리하면 안 된다.
+         * 그래서 FLAG_FL 비트를 마스킹해 두었다. */
 	write_msr(MSR_SYSCALL_MASK,
 			FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);	
 

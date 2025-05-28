@@ -6,20 +6,15 @@
 #include "threads/vaddr.h"
 #include "intrinsic.h"
 
-/* The Global Descriptor Table (GDT).
+/* 전역 디스크립터 테이블(GDT).
  *
- * The GDT, an x86-64 specific structure, defines segments that can
- * potentially be used by all processes in a system, subject to
- * their permissions.  There is also a per-process Local
- * Descriptor Table (LDT) but that is not used by modern
- * operating systems.
+ * GDT는 x86-64에서 사용되는 구조로, 시스템의 모든 프로세스가
+ * 권한에 따라 사용할 수 있는 세그먼트를 정의한다. 각 프로세스마다
+ * Local Descriptor Table(LDT)이 존재하지만 현대 OS에서는 쓰이지 않는다.
  *
- * Each entry in the GDT, which is known by its byte offset in
- * the table, identifies a segment.  For our purposes only three
- * types of segments are of interest: code, data, and TSS or
- * Task-State Segment descriptors.  The former two types are
- * exactly what they sound like.  The TSS is used primarily for
- * stack switching on interrupts. */
+ * GDT의 각 항목은 테이블에서의 바이트 오프셋으로 구분되며,
+ * 우리가 관심 있게 볼 세그먼트는 코드, 데이터, 그리고 TSS(Task-State Segment) 세 가지다.
+ * 앞의 두 종류는 이름 그대로이고, TSS는 인터럽트 시 스택을 전환하는 데 주로 사용된다. */
 
 struct segment_desc {
 	unsigned lim_15_0 : 16;
@@ -77,11 +72,11 @@ struct desc_ptr gdt_ds = {
 	.address = (uint64_t) gdt
 };
 
-/* Sets up a proper GDT.  The bootstrap loader's GDT didn't
-   include user-mode selectors or a TSS, but we need both now. */
+/* 부트스트랩 단계에서 사용된 GDT에는 사용자 모드 세그먼트와 TSS가 없으므로
+   이를 갖춘 올바른 GDT를 새로 설정한다. */
 void
 gdt_init (void) {
-	/* Initialize GDT. */
+        /* GDT 초기화 */
 	struct segment_descriptor64 *tss_desc =
 		(struct segment_descriptor64 *) &gdt[SEL_TSS >> 3];
 	struct task_state *tss = tss_get ();
@@ -106,7 +101,7 @@ gdt_init (void) {
 	};
 
 	lgdt (&gdt_ds);
-	/* reload segment registers */
+        /* 세그먼트 레지스터를 다시 로드한다 */
 	asm volatile("movw %%ax, %%gs" :: "a" (SEL_UDSEG));
 	asm volatile("movw %%ax, %%fs" :: "a" (0));
 	asm volatile("movw %%ax, %%es" :: "a" (SEL_KDSEG));
@@ -117,6 +112,6 @@ gdt_init (void) {
 			"pushq %%rax\n"
 			"lretq\n"
 			"1:\n" :: "b" (SEL_KCSEG):"cc","memory");
-	/* Kill the local descriptor table */
+        /* 로컬 디스크립터 테이블을 비운다 */
 	lldt (0);
 }
