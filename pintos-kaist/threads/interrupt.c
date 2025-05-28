@@ -71,10 +71,10 @@ static struct desc_ptr idt_desc = {
 	}; \
 }
 
-/* Creates an interrupt gate that invokes FUNCTION with the given DPL. */
+/* FUNCTION을 주어진 DPL로 호출하는 인터럽트 게이트 생성. */
 #define make_intr_gate(g, function, dpl) make_gate((g), (function), (dpl), 14)
 
-/* Creates a trap gate that invokes FUNCTION with the given DPL. */
+/* FUNCTION을 주어진 DPL로 호출하는 트랩 게이트 생성. */
 #define make_trap_gate(g, function, dpl) make_gate((g), (function), (dpl), 15)
 
 
@@ -104,45 +104,40 @@ enum intr_level
 intr_get_level (void) {
 	uint64_t flags;
 
-	/* Push the flags register on the processor stack, then pop the
-	   value off the stack into `flags'.  See [IA32-v2b] "PUSHF"
-	   and "POP" and [IA32-v3a] 5.8.1 "Masking Maskable Hardware
-	   Interrupts". */
+        /* FLAGS 레지스터를 스택에 푸시한 뒤 다시 꺼내어 `flags'에 저장한다.
+           자세한 내용은 [IA32-v2b]의 "PUSHF"와 "POP", [IA32-v3a] 5.8.1 절을 참고. */
 	asm volatile ("pushfq; popq %0" : "=g" (flags));
 
 	return flags & FLAG_IF ? INTR_ON : INTR_OFF;
 }
 
-/* Enables or disables interrupts as specified by LEVEL and
-   returns the previous interrupt status. */
+/* LEVEL 값에 따라 인터럽트를 켜거나 끄고,
+   이전 인터럽트 상태를 반환한다. */
 enum intr_level
 intr_set_level (enum intr_level level) {
 	return level == INTR_ON ? intr_enable () : intr_disable ();
 }
 
-/* Enables interrupts and returns the previous interrupt status. */
+/* 인터럽트를 활성화하고 이전 상태를 반환한다. */
 enum intr_level
 intr_enable (void) {
 	enum intr_level old_level = intr_get_level ();
 	ASSERT (!intr_context ());
 
-	/* Enable interrupts by setting the interrupt flag.
-
-	   See [IA32-v2b] "STI" and [IA32-v3a] 5.8.1 "Masking Maskable
-	   Hardware Interrupts". */
+        /* 인터럽트 플래그를 세트하여 인터럽트를 활성화한다.
+           자세한 내용은 [IA32-v2b] "STI"와 [IA32-v3a] 5.8.1 절 참고. */
 	asm volatile ("sti");
 
 	return old_level;
 }
 
-/* Disables interrupts and returns the previous interrupt status. */
+/* 인터럽트를 비활성화하고 이전 상태를 반환한다. */
 enum intr_level
 intr_disable (void) {
 	enum intr_level old_level = intr_get_level ();
 
-	/* Disable interrupts by clearing the interrupt flag.
-	   See [IA32-v2b] "CLI" and [IA32-v3a] 5.8.1 "Masking Maskable
-	   Hardware Interrupts". */
+        /* 인터럽트 플래그를 클리어하여 인터럽트를 끈다.
+           자세한 내용은 [IA32-v2b] "CLI"와 [IA32-v3a] 5.8.1 절 참고. */
 	asm volatile ("cli" : : : "memory");
 
 	return old_level;
@@ -192,10 +187,9 @@ intr_init (void) {
 	intr_names[19] = "#XF SIMD Floating-Point Exception";
 }
 
-/* Registers interrupt VEC_NO to invoke HANDLER with descriptor
-   privilege level DPL.  Names the interrupt NAME for debugging
-   purposes.  The interrupt handler will be invoked with
-   interrupt status set to LEVEL. */
+/* 인터럽트 번호 VEC_NO를 등록하여 HANDLER를 호출하게 한다.
+   해당 인터럽트는 디버깅을 위해 NAME으로 이름을 붙이며
+   인터럽트 핸들러는 LEVEL 상태에서 실행된다. */
 static void
 register_handler (uint8_t vec_no, int dpl, enum intr_level level,
 		intr_handler_func *handler, const char *name) {
@@ -210,9 +204,9 @@ register_handler (uint8_t vec_no, int dpl, enum intr_level level,
 	intr_names[vec_no] = name;
 }
 
-/* Registers external interrupt VEC_NO to invoke HANDLER, which
-   is named NAME for debugging purposes.  The handler will
-   execute with interrupts disabled. */
+/* 외부 인터럽트 번호 VEC_NO에 대해 HANDLER를 등록한다.
+   디버깅을 위해 NAME으로 이름을 붙이며,
+   핸들러는 인터럽트가 비활성화된 상태에서 실행된다. */
 void
 intr_register_ext (uint8_t vec_no, intr_handler_func *handler,
 		const char *name) {
@@ -220,19 +214,13 @@ intr_register_ext (uint8_t vec_no, intr_handler_func *handler,
 	register_handler (vec_no, 0, INTR_OFF, handler, name);
 }
 
-/* Registers internal interrupt VEC_NO to invoke HANDLER, which
-   is named NAME for debugging purposes.  The interrupt handler
-   will be invoked with interrupt status LEVEL.
+/* 내부 인터럽트 번호 VEC_NO에 대해 HANDLER를 등록한다.
+   디버깅을 위해 NAME으로 이름을 붙이며, 핸들러는 LEVEL 상태에서 실행된다.
 
-   The handler will have descriptor privilege level DPL, meaning
-   that it can be invoked intentionally when the processor is in
-   the DPL or lower-numbered ring.  In practice, DPL==3 allows
-   user mode to invoke the interrupts and DPL==0 prevents such
-   invocation.  Faults and exceptions that occur in user mode
-   still cause interrupts with DPL==0 to be invoked.  See
-   [IA32-v3a] sections 4.5 "Privilege Levels" and 4.8.1.1
-   "Accessing Nonconforming Code Segments" for further
-   discussion. */
+   핸들러의 DPL 값에 따라 사용자 모드에서 호출 가능한지 결정된다.
+   보통 DPL이 3이면 사용자 모드에서도 호출할 수 있고, 0이면 불가능하다.
+   사용자 모드에서 발생한 예외 역시 DPL==0 인터럽트로 전달된다.
+   자세한 내용은 [IA32-v3a] 4.5절과 4.8.1.1절을 참고. */
 void
 intr_register_int (uint8_t vec_no, int dpl, enum intr_level level,
 		intr_handler_func *handler, const char *name)
@@ -241,17 +229,15 @@ intr_register_int (uint8_t vec_no, int dpl, enum intr_level level,
 	register_handler (vec_no, dpl, level, handler, name);
 }
 
-/* Returns true during processing of an external interrupt
-   and false at all other times. */
+/* 외부 인터럽트 처리 중이면 true, 그 외에는 false를 반환한다. */
 bool
 intr_context (void) {
 	return in_external_intr;
 }
 
-/* During processing of an external interrupt, directs the
-   interrupt handler to yield to a new process just before
-   returning from the interrupt.  May not be called at any other
-   time. */
+/* 외부 인터럽트 처리 중에 호출하면,
+   인터럽트가 끝나기 직전에 새 스케줄을 하도록 지정한다.
+   그 외의 시점에서는 호출할 수 없다. */
 void
 intr_yield_on_return (void) {
 	ASSERT (intr_context ());

@@ -112,10 +112,10 @@ resolve_area_info (struct area *base_mem, struct area *ext_mem) {
 }
 
 /*
- * Populate the pool.
- * All the pages are manged by this allocator, even include code page.
- * Basically, give half of memory to kernel, half to user.
- * We push base_mem portion to the kernel as much as possible.
+ * 풀을 초기화한다.
+ * 코드 페이지까지 모든 메모리를 이 할당자가 관리하며,
+ * 기본적으로 메모리를 절반씩 커널과 사용자에게 나눈다.
+ * 가능한 한 base_mem 영역을 커널에 우선 배정한다.
  */
 static void
 populate_pools (struct area *base_mem, struct area *ext_mem) {
@@ -251,12 +251,10 @@ palloc_init (void) {
 	return ext_mem.end;
 }
 
-/* Obtains and returns a group of PAGE_CNT contiguous free pages.
-   If PAL_USER is set, the pages are obtained from the user pool,
-   otherwise from the kernel pool.  If PAL_ZERO is set in FLAGS,
-   then the pages are filled with zeros.  If too few pages are
-   available, returns a null pointer, unless PAL_ASSERT is set in
-   FLAGS, in which case the kernel panics. */
+/* PAGE_CNT개의 연속된 빈 페이지를 할당해 반환한다.
+   PAL_USER가 지정되면 사용자 풀에서, 아니면 커널 풀에서 얻는다.
+   PAL_ZERO가 설정되면 페이지를 0으로 채운다.
+   남은 페이지가 부족하면 NULL을 반환하지만 PAL_ASSERT가 설정되어 있으면 패닉을 일으킨다. */
 void *
 palloc_get_multiple (enum palloc_flags flags, size_t page_cnt) {
 	struct pool *pool = flags & PAL_USER ? &user_pool : &kernel_pool;
@@ -282,13 +280,10 @@ palloc_get_multiple (enum palloc_flags flags, size_t page_cnt) {
 	return pages;
 }
 
-/* Obtains a single free page and returns its kernel virtual
-   address.
-   If PAL_USER is set, the page is obtained from the user pool,
-   otherwise from the kernel pool.  If PAL_ZERO is set in FLAGS,
-   then the page is filled with zeros.  If no pages are
-   available, returns a null pointer, unless PAL_ASSERT is set in
-   FLAGS, in which case the kernel panics. */
+/* 빈 페이지 한 장을 얻어 커널 가상 주소를 반환한다.
+   PAL_USER가 있으면 사용자 풀에서, 아니면 커널 풀에서 가져온다.
+   PAL_ZERO가 지정되면 페이지를 0으로 채운다.
+   할당할 페이지가 없으면 NULL을 반환하지만 PAL_ASSERT가 설정되어 있으면 패닉을 일으킨다. */
 void *
 palloc_get_page (enum palloc_flags flags) {
 	return palloc_get_multiple (flags, 1);

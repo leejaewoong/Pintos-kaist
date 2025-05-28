@@ -730,16 +730,14 @@ do_iret (struct intr_frame *tf) {
 			: : "g" ((uint64_t) tf) : "memory");
 }
 
-/* Switching the thread by activating the new thread's page
-   tables, and, if the previous thread is dying, destroying it.
+/* 새 스레드의 페이지 테이블을 활성화하여 스레드를 전환한다.
+   이전 스레드가 종료 상태이면 이곳에서 파괴한다.
 
-   At this function's invocation, we just switched from thread
-   PREV, the new thread is already running, and interrupts are
-   still disabled.
+   이 함수가 호출될 때는 이미 PREV 스레드에서 전환된 뒤이며
+   새 스레드가 실행 중이고 인터럽트는 아직 꺼져 있다.
 
-   It's not safe to call printf() until the thread switch is
-   complete.  In practice that means that printf()s should be
-   added at the end of the function. */
+   스레드 전환이 끝나기 전에는 printf() 사용이 안전하지 않다.
+   실제로는 함수 끝부분에서만 printf()를 호출해야 한다. */
 static void
 thread_launch (struct thread *th) {
 	uint64_t tf_cur = (uint64_t) &running_thread ()->tf;

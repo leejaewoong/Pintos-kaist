@@ -69,26 +69,25 @@ malloc_init (void) {
 	}
 }
 
-/* Obtains and returns a new block of at least SIZE bytes.
-   Returns a null pointer if memory is not available. */
+/* 최소 SIZE 바이트의 새 블록을 얻어 반환한다.
+   메모리가 부족하면 NULL을 반환한다. */
 void *
 malloc (size_t size) {
 	struct desc *d;
 	struct block *b;
 	struct arena *a;
 
-	/* A null pointer satisfies a request for 0 bytes. */
+        /* SIZE가 0이면 NULL을 반환한다. */
 	if (size == 0)
 		return NULL;
 
-	/* Find the smallest descriptor that satisfies a SIZE-byte
-	   request. */
+        /* SIZE 바이트를 수용할 수 있는 가장 작은 디스크립터를 찾는다. */
 	for (d = descs; d < descs + desc_cnt; d++)
 		if (d->block_size >= size)
 			break;
 	if (d == descs + desc_cnt) {
-		/* SIZE is too big for any descriptor.
-		   Allocate enough pages to hold SIZE plus an arena. */
+                /* SIZE가 디스크립터 범위를 넘으면
+                   SIZE와 arena를 담을 만큼의 페이지를 할당한다. */
 		size_t page_cnt = DIV_ROUND_UP (size + sizeof *a, PGSIZE);
 		a = palloc_get_multiple (0, page_cnt);
 		if (a == NULL)
@@ -104,18 +103,18 @@ malloc (size_t size) {
 
 	lock_acquire (&d->lock);
 
-	/* If the free list is empty, create a new arena. */
+        /* free list가 비어 있으면 새 arena를 만든다. */
 	if (list_empty (&d->free_list)) {
 		size_t i;
 
-		/* Allocate a page. */
+                /* 새 페이지 할당. */
 		a = palloc_get_page (0);
 		if (a == NULL) {
 			lock_release (&d->lock);
 			return NULL;
 		}
 
-		/* Initialize arena and add its blocks to the free list. */
+                /* arena 초기화 후 각 블록을 free list에 추가. */
 		a->magic = ARENA_MAGIC;
 		a->desc = d;
 		a->free_cnt = d->blocks_per_arena;
@@ -125,7 +124,7 @@ malloc (size_t size) {
 		}
 	}
 
-	/* Get a block from free list and return it. */
+        /* free list에서 블록 하나를 꺼내 반환. */
 	b = list_entry (list_pop_front (&d->free_list), struct block, free_elem);
 	a = block_to_arena (b);
 	a->free_cnt--;

@@ -200,10 +200,8 @@ disk_size (struct disk *d) {
 	return d->capacity;
 }
 
-/* Reads sector SEC_NO from disk D into BUFFER, which must have
-   room for DISK_SECTOR_SIZE bytes.
-   Internally synchronizes accesses to disks, so external
-   per-disk locking is unneeded. */
+/* 디스크 D의 섹터 SEC_NO를 DISK_SECTOR_SIZE 바이트 크기의 BUFFER로 읽어 온다.
+   디스크 접근은 내부에서 동기화되므로 별도의 락이 필요 없다. */
 void
 disk_read (struct disk *d, disk_sector_t sec_no, void *buffer) {
 	struct channel *c;
@@ -223,11 +221,10 @@ disk_read (struct disk *d, disk_sector_t sec_no, void *buffer) {
 	lock_release (&c->lock);
 }
 
-/* Write sector SEC_NO to disk D from BUFFER, which must contain
-   DISK_SECTOR_SIZE bytes.  Returns after the disk has
-   acknowledged receiving the data.
-   Internally synchronizes accesses to disks, so external
-   per-disk locking is unneeded. */
+/* BUFFER가 DISK_SECTOR_SIZE 바이트를 담고 있어야 하며,
+   이를 디스크 D의 섹터 SEC_NO에 기록한다.
+   디스크가 데이터를 받았다고 알려온 뒤에 반환한다.
+   디스크 접근은 내부에서 동기화되므로 별도의 락이 필요 없다. */
 void
 disk_write (struct disk *d, disk_sector_t sec_no, const void *buffer) {
 	struct channel *c;
@@ -409,49 +406,45 @@ select_sector (struct disk *d, disk_sector_t sec_no) {
 			DEV_MBS | DEV_LBA | (d->dev_no == 1 ? DEV_DEV : 0) | (sec_no >> 24));
 }
 
-/* Writes COMMAND to channel C and prepares for receiving a
-   completion interrupt. */
+/* 채널 C에 COMMAND를 기록하고 완료 인터럽트를 받을 준비를 한다. */
 static void
 issue_pio_command (struct channel *c, uint8_t command) {
-	/* Interrupts must be enabled or our semaphore will never be
-	   up'd by the completion handler. */
+        /* 인터럽트가 켜져 있지 않으면 완료 핸들러가 세마포어를 올리지 못한다. */
 	ASSERT (intr_get_level () == INTR_ON);
 
 	c->expecting_interrupt = true;
 	outb (reg_command (c), command);
 }
 
-/* Reads a sector from channel C's data register in PIO mode into
-   SECTOR, which must have room for DISK_SECTOR_SIZE bytes. */
+/* PIO 모드로 채널 C의 데이터 레지스터에서 섹터를 읽어
+   DISK_SECTOR_SIZE 바이트 크기의 SECTOR 버퍼에 저장한다. */
 static void
 input_sector (struct channel *c, void *sector) {
 	insw (reg_data (c), sector, DISK_SECTOR_SIZE / 2);
 }
 
-/* Writes SECTOR to channel C's data register in PIO mode.
-   SECTOR must contain DISK_SECTOR_SIZE bytes. */
+/* PIO 모드로 채널 C의 데이터 레지스터에 SECTOR를 기록한다.
+   버퍼는 DISK_SECTOR_SIZE 바이트 크기여야 한다. */
 static void
 output_sector (struct channel *c, const void *sector) {
 	outsw (reg_data (c), sector, DISK_SECTOR_SIZE / 2);
 }
-
-/* Low-level ATA primitives. */
+/* 컨트롤러가 유휴 상태(BSY와 DRQ 비트가 0)가 될 때까지 최대 10초 대기한다.
+   상태 레지스터를 읽으면 대기 중인 인터럽트도 함께 지워진다. */
+/* 디스크 D가 BSY 비트를 해제할 때까지 최대 30초 기다린 후
+   DRQ 비트의 상태를 반환한다.
+   ATA 규격상 초기화에 그 정도 시간이 걸릴 수 있다. */
+/* 채널을 설정해 디스크 D를 선택된 상태로 만든다. */
+/* select_device()와 같지만 호출 전후로 채널이
+   유휴 상태가 될 때까지 기다린다. */
 
-/* Wait up to 10 seconds for the controller to become idle, that
-   is, for the BSY and DRQ bits to clear in the status register.
-
-   As a side effect, reading the status register clears any
-   pending interrupt. */
-static void
-wait_until_idle (const struct disk *d) {
-	int i;
-
-	for (i = 0; i < 1000; i++) {
-		if ((inb (reg_status (d->channel)) & (STA_BSY | STA_DRQ)) == 0)
-			return;
-		timer_usleep (10);
-	}
-
+/* 디스크의 읽기/쓰기 횟수를 검사하기 위한 도구.
+ * int 0x43, 0x44를 통해 호출한다.
+ * 입력:
+ *   @RDX - 확인할 채널 번호
+ *   @RCX - 확인할 장치 번호
+ * 출력:
+ *   @RAX - 해당 디스크의 읽기/쓰기 횟수 */
 	printf ("%s: idle timeout\n", d->name);
 }
 
