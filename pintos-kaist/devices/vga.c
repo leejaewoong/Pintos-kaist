@@ -7,13 +7,13 @@
 #include "threads/interrupt.h"
 #include "threads/vaddr.h"
 
-/* VGA 텍스트 화면 지원. 자세한 내용은 [FREEVGA]를 참고. */
+/* VGA 텍스트 화면을 지원한다. 자세한 내용은 [FREEVGA] 참고. */
 
-/* 텍스트 화면의 열과 행 수. */
+/* 텍스트 화면의 열과 행 개수. */
 #define COL_CNT 80
 #define ROW_CNT 25
 
-/* 현재 커서 위치. (0,0)은 화면의 왼쪽 위. */
+/* 현재 커서 위치. (0,0)은 화면의 좌상단. */
 static size_t cx, cy;
 
 /* 검은 배경에 회색 글씨 속성 값. */
@@ -32,7 +32,7 @@ static void find_cursor (size_t *x, size_t *y);
 /* VGA 텍스트 화면을 초기화한다. */
 static void
 init (void) {
-        /* 이미 초기화되었는가? */
+        /* 이미 초기화됐는지 확인. */
 	static bool inited;
 	if (!inited) {
 		fb = ptov (0xb8000);
@@ -41,11 +41,10 @@ init (void) {
 	}
 }
 
-/* 제어 문자를 해석해 VGA 화면에 C를 출력한다. */
+/* 제어 문자를 처리해 VGA 화면에 C를 출력한다. */
 void
 vga_putc (int c) {
-        /* 콘솔 출력을 할 수 있는 인터럽트 핸들러를 막기 위해
-           인터럽트를 비활성화한다. */
+        /* 콘솔 출력을 막기 위해 인터럽트를 잠시 비활성화한다. */
 	enum intr_level old_level = intr_disable ();
 
 	init ();
@@ -82,25 +81,25 @@ vga_putc (int c) {
 			break;
 	}
 
-        /* 커서 위치 갱신. */
+        /* 커서 위치를 갱신한다. */
 	move_cursor ();
 
 	intr_set_level (old_level);
 }
+
 /* 화면을 지우고 커서를 좌상단으로 이동한다. */
-
-/* Y행을 공백으로 채운다. */
 static void
-/* 커서를 다음 줄 첫 칸으로 이동한다.
-   마지막 줄이라면 화면을 한 줄 위로 스크롤한다. */
-/* 하드웨어 커서를 (cx,cy)로 이동한다. */
-        /* "Manipulating the Text-mode Cursor"([FREEVGA]) 참고. */
+cls (void) {
+	size_t y;
 
-/* 현재 하드웨어 커서 위치를 (*X,*Y)에 읽어 온다. */
-        /* "Manipulating the Text-mode Cursor"([FREEVGA]) 참고. */
+	for (y = 0; y < ROW_CNT; y++)
+		clear_row (y);
+
+	cx = cy = 0;
+	move_cursor ();
 }
 
-/* Clears row Y to spaces. */
+/* Y 행을 공백 문자로 채운다. */
 static void
 clear_row (size_t y) {
 	size_t x;
@@ -112,9 +111,8 @@ clear_row (size_t y) {
 	}
 }
 
-/* Advances the cursor to the first column in the next line on
-   the screen.  If the cursor is already on the last line on the
-   screen, scrolls the screen upward one line. */
+/* 다음 줄의 첫 열로 커서를 옮긴다.
+   마지막 줄에 있을 경우 화면을 한 줄 위로 올린다. */
 static void
 newline (void) {
 	cx = 0;
@@ -127,19 +125,19 @@ newline (void) {
 	}
 }
 
-/* Moves the hardware cursor to (cx,cy). */
+/* 하드웨어 커서를 (cx,cy) 위치로 이동한다. */
 static void
 move_cursor (void) {
-	/* See [FREEVGA] under "Manipulating the Text-mode Cursor". */
+        /* "Manipulating the Text-mode Cursor"([FREEVGA]) 참고. */
 	uint16_t cp = cx + COL_CNT * cy;
 	outw (0x3d4, 0x0e | (cp & 0xff00));
 	outw (0x3d4, 0x0f | (cp << 8));
 }
 
-/* Reads the current hardware cursor position into (*X,*Y). */
+/* 현재 하드웨어 커서 위치를 (*X,*Y)에 읽어 온다. */
 static void
 find_cursor (size_t *x, size_t *y) {
-	/* See [FREEVGA] under "Manipulating the Text-mode Cursor". */
+        /* "Manipulating the Text-mode Cursor"([FREEVGA]) 참고. */
 	uint16_t cp;
 
 	outb (0x3d4, 0x0e);

@@ -167,8 +167,7 @@ paging_init (uint64_t mem_end) {
 	pml4_activate(0);
 }
 
-/* Breaks the kernel command line into words and returns them as
-   an argv-like array. */
+/* 커널 명령줄을 공백 기준으로 나누어 argv 형태의 배열로 반환한다. */
 static char **
 read_command_line (void) {
 	static char *argv[LOADER_ARGS_LEN / 2 + 1];
@@ -200,8 +199,8 @@ read_command_line (void) {
 	return argv;
 }
 
-/* Parses options in ARGV[]
-   and returns the first non-option argument. */
+/* ARGV[]에 있는 옵션을 해석하고
+   옵션이 아닌 첫 번째 인자를 반환한다. */
 static char **
 parse_options (char **argv) {
 	for (; *argv != NULL && **argv == '-'; argv++) {
@@ -234,7 +233,7 @@ parse_options (char **argv) {
 	return argv;
 }
 
-/* Runs the task specified in ARGV[1]. */
+/* ARGV[1]에 지정된 작업을 실행한다. */
 static void
 run_task (char **argv) {
 	const char *task = argv[1];
@@ -252,18 +251,18 @@ run_task (char **argv) {
 	printf ("Execution of '%s' complete.\n", task);
 }
 
-/* Executes all of the actions specified in ARGV[]
-   up to the null pointer sentinel. */
+/* ARGV[]에 지정된 모든 동작을
+   NULL 포인터가 나올 때까지 실행한다. */
 static void
 run_actions (char **argv) {
-	/* An action. */
+        /* 개별 동작을 나타내는 구조체. */
 	struct action {
-		char *name;                       /* Action name. */
-		int argc;                         /* # of args, including action name. */
-		void (*function) (char **argv);   /* Function to execute action. */
+                char *name;                       /* 동작 이름. */
+                int argc;                         /* 동작 이름을 포함한 인자 수. */
+                void (*function) (char **argv);   /* 동작을 수행할 함수. */
 	};
 
-	/* Table of supported actions. */
+        /* 지원하는 동작 목록. */
 	static const struct action actions[] = {
 		{"run", 2, run_task},
 #ifdef FILESYS
@@ -280,27 +279,26 @@ run_actions (char **argv) {
 		const struct action *a;
 		int i;
 
-		/* Find action name. */
+                /* 실행할 동작을 찾는다. */
 		for (a = actions; ; a++)
 			if (a->name == NULL)
 				PANIC ("unknown action `%s' (use -h for help)", *argv);
 			else if (!strcmp (*argv, a->name))
 				break;
 
-		/* Check for required arguments. */
+                /* 필요한 인자가 있는지 확인한다. */
 		for (i = 1; i < a->argc; i++)
 			if (argv[i] == NULL)
 				PANIC ("action `%s' requires %d argument(s)", *argv, a->argc - 1);
 
-		/* Invoke action and advance. */
+                /* 동작을 실행한 뒤 다음으로 이동한다. */
 		a->function (argv);
 		argv += a->argc;
 	}
 
 }
 
-/* Prints a kernel command line help message and powers off the
-   machine. */
+/* 커널 명령줄 사용법을 출력하고 시스템을 종료한다. */
 static void
 usage (void) {
 	printf ("\nCommand line syntax: [OPTION...] [ACTION...]\n"
@@ -334,8 +332,7 @@ usage (void) {
 }
 
 
-/* Powers down the machine we're running on,
-   as long as we're running on Bochs or QEMU. */
+/* Bochs나 QEMU에서 실행 중이라면 전원을 끈다. */
 void
 power_off (void) {
 #ifdef FILESYS
@@ -349,7 +346,7 @@ power_off (void) {
 	for (;;);
 }
 
-/* Print statistics about Pintos execution. */
+/* Pintos 실행 통계를 출력한다. */
 static void
 print_stats (void) {
 	timer_print_stats ();

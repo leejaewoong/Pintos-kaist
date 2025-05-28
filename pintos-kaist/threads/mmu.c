@@ -139,7 +139,7 @@ pdp_for_each (uint64_t *pdp,
 	return true;
 }
 
-/* Apply FUNC to each available pte entries including kernel's. */
+/* 커널 영역을 포함한 모든 PTE 엔트리에 FUNC를 적용한다. */
 bool
 pml4_for_each (uint64_t *pml4, pte_for_each_func *func, void *aux) {
 	for (unsigned i = 0; i < PGSIZE / sizeof(uint64_t *); i++) // 왜 PGSIZE / sizeof(uint64_t *)만큼 반복할까?

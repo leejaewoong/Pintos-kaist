@@ -8,8 +8,8 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 
-/* 이 파일의 코드는 ATA(IDE) 컨트롤러 인터페이스로,
-   [ATA-3] 규격을 가능한 한 따르도록 작성되었다. */
+/* 이 파일의 코드는 ATA(IDE) 컨트롤러 인터페이스로
+   [ATA-3] 규격을 최대한 준수한다. */
 
 /* ATA 명령 블록 포트 주소. */
 #define reg_data(CHANNEL) ((CHANNEL)->reg_base + 0)     /* 데이터 */
@@ -23,7 +23,7 @@
 #define reg_command(CHANNEL) reg_status (CHANNEL)       /* 명령 (쓰기 전용) */
 
 /* ATA 제어 블록 포트 주소.
-   최신 컨트롤러까지 지원하려면 부족하지만 여기서는 충분하다. */
+   최신 컨트롤러 지원에는 부족하지만 여기서는 충분하다. */
 #define reg_ctl(CHANNEL) ((CHANNEL)->reg_base + 0x206)  /* Control (w/o). */
 #define reg_alt_status(CHANNEL) reg_ctl (CHANNEL)       /* Alt Status (r/o). */
 
@@ -200,10 +200,8 @@ disk_size (struct disk *d) {
 	return d->capacity;
 }
 
-/* Reads sector SEC_NO from disk D into BUFFER, which must have
-   room for DISK_SECTOR_SIZE bytes.
-   Internally synchronizes accesses to disks, so external
-   per-disk locking is unneeded. */
+/* 디스크 D의 섹터 SEC_NO를 DISK_SECTOR_SIZE 바이트 크기의 BUFFER로 읽어 온다.
+   디스크 접근은 내부에서 동기화되므로 별도의 락이 필요 없다. */
 void
 disk_read (struct disk *d, disk_sector_t sec_no, void *buffer) {
 	struct channel *c;
@@ -223,11 +221,10 @@ disk_read (struct disk *d, disk_sector_t sec_no, void *buffer) {
 	lock_release (&c->lock);
 }
 
-/* Write sector SEC_NO to disk D from BUFFER, which must contain
-   DISK_SECTOR_SIZE bytes.  Returns after the disk has
-   acknowledged receiving the data.
-   Internally synchronizes accesses to disks, so external
-   per-disk locking is unneeded. */
+/* BUFFER가 DISK_SECTOR_SIZE 바이트를 담고 있어야 하며,
+   이를 디스크 D의 섹터 SEC_NO에 기록한다.
+   디스크가 데이터를 받았다고 알려온 뒤에 반환한다.
+   디스크 접근은 내부에서 동기화되므로 별도의 락이 필요 없다. */
 void
 disk_write (struct disk *d, disk_sector_t sec_no, const void *buffer) {
 	struct channel *c;
@@ -246,52 +243,60 @@ disk_write (struct disk *d, disk_sector_t sec_no, const void *buffer) {
 	d->write_cnt++;
 	lock_release (&c->lock);
 }
-/* 디스크 탐지 및 식별. */
+
+/* Disk detection and identification. */
 
-/* ATA 채널을 리셋하고 연결된 장치들이 초기화될 때까지 기다린다. */
-        /* 어떤 장치가 있는지에 따라 리셋 순서가 달라지므로
-           먼저 장치 존재 여부를 확인한다. */
-        /* 소프트 리셋을 수행하면 부수적으로 장치 0이 선택된다.
-           이와 함께 인터럽트를 활성화한다. */
-        /* 장치 0의 BSY 비트가 해제될 때까지 대기. */
-        /* 장치 1의 BSY 비트가 해제될 때까지 대기. */
-/* 장치 D가 ATA 디스크인지 확인해 is_ata에 기록한다.
-   D가 마스터(0)라면 슬레이브(1)가 존재할 가능성을 반환하며,
-   슬레이브일 경우 반환값은 의미 없다. */
-/* 디스크 D에 IDENTIFY DEVICE 명령을 보내 응답을 읽고,
-   그 결과로 용량을 설정한 뒤 정보를 출력한다. */
-/* STRING은 바이트 쌍이 뒤집힌 특수 형식이며,
-   마지막 공백이나 널 문자는 출력하지 않는다. */
-/* 장치 D가 준비될 때까지 기다린 뒤
-   섹터 선택 레지스터에 SEC_NO를 기록한다. LBA 모드를 사용한다. */
-/* 채널 C에 COMMAND를 기록하고 완료 인터럽트를 받을 준비를 한다. */
-/* PIO 모드로 채널 C의 데이터 레지스터에서 섹터를 읽어
-   DISK_SECTOR_SIZE 바이트 크기의 SECTOR 버퍼에 저장한다. */
+static void print_ata_string (char *string, size_t size);
 
-/* PIO 모드로 채널 C의 데이터 레지스터에 SECTOR를 기록한다.
-   버퍼는 DISK_SECTOR_SIZE 바이트 크기여야 한다. */
-/* 저수준 ATA 기본 동작. */
+/* Resets an ATA channel and waits for any devices present on it
+   to finish the reset. */
+static void
+reset_channel (struct channel *c) {
+	bool present[2];
+	int dev_no;
 
-/* 컨트롤러가 유휴 상태(BSY와 DRQ 비트가 클리어) 되기를
-   최대 10초까지 기다린다. 상태 레지스터를 읽으면
-   대기 중인 인터럽트도 함께 지워진다. */
-/* 디스크 D가 BSY를 해제할 때까지 최대 30초 기다린 뒤
-   DRQ 비트 상태를 반환한다. ATA 표준상 초기화에 그 정도 시간이
-   걸릴 수 있다. */
+	/* The ATA reset sequence depends on which devices are present,
+	   so we start by detecting device presence. */
+	for (dev_no = 0; dev_no < 2; dev_no++) {
+		struct disk *d = &c->devices[dev_no];
 
-/* 디스크 D가 선택되도록 채널을 설정한다. */
-/* select_device()와 같지만 호출 전후로 채널이
-   유휴 상태가 될 때까지 대기한다. */
-/* ATA 인터럽트 핸들러. */
-                                inb (reg_status (c));               /* 인터럽트 인식 */
-                                sema_up (&c->completion_wait);      /* 대기 스레드 깨우기 */
-/* 디스크의 읽기/쓰기 횟수를 검사하기 위한 도구.
- * int 0x43, 0x44를 통해 호출한다.
- * 입력:
- *   @RDX - 확인할 채널 번호
- *   @RCX - 확인할 장치 번호
- * 출력:
- *   @RAX - 해당 디스크의 읽기/쓰기 횟수 */
+		select_device (d);
+
+		outb (reg_nsect (c), 0x55);
+		outb (reg_lbal (c), 0xaa);
+
+		outb (reg_nsect (c), 0xaa);
+		outb (reg_lbal (c), 0x55);
+
+		outb (reg_nsect (c), 0x55);
+		outb (reg_lbal (c), 0xaa);
+
+		present[dev_no] = (inb (reg_nsect (c)) == 0x55
+				&& inb (reg_lbal (c)) == 0xaa);
+	}
+
+	/* Issue soft reset sequence, which selects device 0 as a side effect.
+	   Also enable interrupts. */
+	outb (reg_ctl (c), 0);
+	timer_usleep (10);
+	outb (reg_ctl (c), CTL_SRST);
+	timer_usleep (10);
+	outb (reg_ctl (c), 0);
+
+	timer_msleep (150);
+
+	/* Wait for device 0 to clear BSY. */
+	if (present[0]) {
+		select_device (&c->devices[0]);
+		wait_while_busy (&c->devices[0]);
+	}
+
+	/* Wait for device 1 to clear BSY. */
+	if (present[1]) {
+		int i;
+
+		select_device (&c->devices[1]);
+		for (i = 0; i < 3000; i++) {
 			if (inb (reg_nsect (c)) == 1 && inb (reg_lbal (c)) == 1)
 				break;
 			timer_msleep (10);
@@ -409,56 +414,53 @@ select_sector (struct disk *d, disk_sector_t sec_no) {
 			DEV_MBS | DEV_LBA | (d->dev_no == 1 ? DEV_DEV : 0) | (sec_no >> 24));
 }
 
-/* Writes COMMAND to channel C and prepares for receiving a
-   completion interrupt. */
+/* 채널 C에 COMMAND를 기록하고 완료 인터럽트를 받을 준비를 한다. */
 static void
 issue_pio_command (struct channel *c, uint8_t command) {
-	/* Interrupts must be enabled or our semaphore will never be
-	   up'd by the completion handler. */
+        /* 인터럽트가 켜져 있지 않으면 완료 핸들러가 세마포어를 올리지 못한다. */
 	ASSERT (intr_get_level () == INTR_ON);
 
 	c->expecting_interrupt = true;
 	outb (reg_command (c), command);
 }
 
-/* Reads a sector from channel C's data register in PIO mode into
-   SECTOR, which must have room for DISK_SECTOR_SIZE bytes. */
+/* PIO 모드로 채널 C의 데이터 레지스터에서 섹터를 읽어
+   DISK_SECTOR_SIZE 바이트 크기의 SECTOR 버퍼에 저장한다. */
 static void
 input_sector (struct channel *c, void *sector) {
 	insw (reg_data (c), sector, DISK_SECTOR_SIZE / 2);
 }
 
-/* Writes SECTOR to channel C's data register in PIO mode.
-   SECTOR must contain DISK_SECTOR_SIZE bytes. */
+/* PIO 모드로 채널 C의 데이터 레지스터에 SECTOR를 기록한다.
+   버퍼는 DISK_SECTOR_SIZE 바이트 크기여야 한다. */
 static void
 output_sector (struct channel *c, const void *sector) {
 	outsw (reg_data (c), sector, DISK_SECTOR_SIZE / 2);
 }
-
-/* Low-level ATA primitives. */
+/* 저수준 ATA 기본 동작. */
+/* 컨트롤러가 유휴 상태(BSY와 DRQ 비트가 클리어) 되기를
+   최대 10초까지 기다린다. 상태 레지스터를 읽으면
+   대기 중인 인터럽트도 함께 지워진다. */
 
-/* Wait up to 10 seconds for the controller to become idle, that
-   is, for the BSY and DRQ bits to clear in the status register.
-
-   As a side effect, reading the status register clears any
-   pending interrupt. */
-static void
-wait_until_idle (const struct disk *d) {
+/* 디스크 D가 BSY 비트를 해제할 때까지 최대 30초 기다린 후
+   DRQ 비트의 상태를 반환한다.
+   ATA 규격상 초기화에 그 정도 시간이 걸릴 수 있다. */
 	int i;
 
-	for (i = 0; i < 1000; i++) {
-		if ((inb (reg_status (d->channel)) & (STA_BSY | STA_DRQ)) == 0)
-			return;
-		timer_usleep (10);
-	}
-
-	printf ("%s: idle timeout\n", d->name);
+/* 채널을 설정해 디스크 D를 선택된 상태로 만든다. */
+/* select_device()와 같지만 호출 전후로 채널이
+   유휴 상태가 될 때까지 기다린다. */
+/* ATA 인터럽트 핸들러. */
+                                inb (reg_status (c));               /* 인터럽트 인식 */
+                                sema_up (&c->completion_wait);      /* 대기 스레드 깨우기 */
+/* 디스크의 읽기/쓰기 횟수를 검사하기 위한 도구.
+ * int 0x43, 0x44를 통해 호출한다.
+ * 입력:
+ *   @RDX - 확인할 채널 번호
+ *   @RCX - 확인할 장치 번호
+ * 출력:
+ *   @RAX - 해당 디스크의 읽기/쓰기 횟수 */
 }
-
-/* Wait up to 30 seconds for disk D to clear BSY,
-   and then return the status of the DRQ bit.
-   The ATA standards say that a disk may take as long as that to
-   complete its reset. */
 static bool
 wait_while_busy (const struct disk *d) {
 	struct channel *c = d->channel;

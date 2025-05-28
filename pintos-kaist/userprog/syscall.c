@@ -16,6 +16,9 @@
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 
+/* 파일 시스템 동기화를 위한 전역 락. */
+struct lock filesys_lock;
+
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler

@@ -142,7 +142,7 @@
 	   printf ("done.\n");
    }
    
-   /* Thread function used by sema_self_test(). */
+   /* sema_self_test()에서 사용하는 스레드 함수. */
    static void
    sema_test_helper (void *sema_) {
 	   struct semaphore *sema = sema_;
