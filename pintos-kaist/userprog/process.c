@@ -35,12 +35,14 @@ process_init (void) {
 	struct thread *curr = thread_current ();	
 
 	/* 파일 배열에 메모리 할당 후 초기화 */
-	curr->fdt_size = FD_MAX;
-	curr->fdt = palloc_get_page(PAL_ZERO);
 	if(curr->fdt == NULL)
-		sys_exit(-1);
-	for (size_t i = 0; i < FD_MAX; i++)
-  		curr->fdt[i] = NULL;
+	{
+		curr->fdt = palloc_get_page(PAL_ZERO);
+		if(curr->fdt == NULL)
+			sys_exit(-1);
+		for (size_t i = 0; i < FD_MAX; i++)
+  			curr->fdt[i] = NULL;
+	}
 }
 
 /* "initd"라 불리는 첫 사용자 프로그램을 실행한다.

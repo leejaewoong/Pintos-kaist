@@ -681,7 +681,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 
 	/* 파일 디스크립터 테이블은 사용자 프로세스 실행 시 초기화된다. */
 	t->fdt = NULL;
-	t->fdt_size = 0;	
+	t->fdt_size = FD_MAX;	
 
 	sema_init(&t->wait_sema, 0); /* wait_sema 초기화 */
 	sema_init(&t->exit_sema, 0); /* exit_sema 초기화 */
