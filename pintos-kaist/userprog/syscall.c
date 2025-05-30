@@ -134,9 +134,7 @@ void sys_exit (int status)
   struct thread *curr = thread_current ();
   
   /* 종료 상태 저장 */
-  curr->exit_status = status; 
-
-  printf ("%s: exit(%d)\n", curr->name, status);  
+  curr->exit_status = status;   
 	
   thread_exit();    
 }

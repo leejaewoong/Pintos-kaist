@@ -299,12 +299,10 @@ process_wait (tid_t child_tid UNUSED) {
 
 /* 프로세스를 종료한다. thread_exit()에서 호출된다. */
 void
-process_exit (void) {
+process_exit (void) {	
 	struct thread *curr = thread_current ();
-	/* TODO: Your code goes here.
-	 * TODO: Implement process termination message (see
-	 * TODO: project2/process_termination.html).
-	 * TODO: We recommend you to implement process resource cleanup here. */
+
+	printf ("%s: exit(%d)\n", curr->name, curr->exit_status);	
 
 	/* 실행 중인 file 닫기 */
 	file_close(curr->running);	
