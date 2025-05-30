@@ -679,6 +679,14 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->base_priority = priority; 	
 	t->next_fd = 3;
 
+	/* 파일 배열에 메모리 할당 후 초기화 */
+	t->fdt_size = FD_MAX;
+	t->fdt = palloc_get_page(PAL_ZERO);
+	if(t->fdt == NULL)
+		sys_exit(-1);
+	for (size_t i = 0; i < FD_MAX; i++)
+  		t->fdt[i] = NULL;
+
 	sema_init(&t->wait_sema, 0); /* wait_sema 초기화 */
 	sema_init(&t->exit_sema, 0); /* exit_sema 초기화 */
 	sema_init(&t->load_sema, 0); /* load_sema 초기화 */

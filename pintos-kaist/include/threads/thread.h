@@ -29,7 +29,7 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
-#define FD_MAX 64                      /* FD 테이블 저장 가능한 최대 갯수 */
+#define FD_MAX 128                      /* FD 테이블 저장 가능한 최대 갯수 */
 
 /* A kernel thread or user process.
  *
@@ -98,7 +98,8 @@ struct thread {
 	struct list donations;              /* 우선순위 donations를 추적하기 위한 리스트 */
 	struct lock *wait_on_lock;          /* 대기 중인 락 */
 	int base_priority;                  /* 기부 이전 우선순위 */	
-	struct file *fdt[FD_MAX];           /* 파일 디스크립터 테이블 */	
+	struct file **fdt;                  /* 파일 디스크립터 테이블 */	
+	size_t fdt_size;                    /* fdt 사이즈 */
 	int next_fd;                        /* 다음에 배정할 fd */ 
 	int exit_status;	                /* 종료 상태 확인 */
 	struct file *running;               /* 실행 중 파일 */
