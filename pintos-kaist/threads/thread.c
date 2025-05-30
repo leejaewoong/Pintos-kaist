@@ -679,13 +679,9 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->base_priority = priority; 	
 	t->next_fd = 3;
 
-	/* 파일 배열에 메모리 할당 후 초기화 */
-	t->fdt_size = FD_MAX;
-	t->fdt = palloc_get_page(PAL_ZERO);
-	if(t->fdt == NULL)
-		sys_exit(-1);
-	for (size_t i = 0; i < FD_MAX; i++)
-  		t->fdt[i] = NULL;
+	/* 파일 디스크립터 테이블은 사용자 프로세스 실행 시 초기화된다. */
+	t->fdt = NULL;
+	t->fdt_size = 0;	
 
 	sema_init(&t->wait_sema, 0); /* wait_sema 초기화 */
 	sema_init(&t->exit_sema, 0); /* exit_sema 초기화 */

@@ -32,7 +32,15 @@ static int parse_cmdline(char *cmdline, char **argv, int max_arg);
 /* initd를 비롯한 모든 프로세스를 위한 기본 초기화 함수. */
 static void
 process_init (void) {
-	struct thread *current = thread_current ();	
+	struct thread *curr = thread_current ();	
+
+	/* 파일 배열에 메모리 할당 후 초기화 */
+	curr->fdt_size = FD_MAX;
+	curr->fdt = palloc_get_page(PAL_ZERO);
+	if(curr->fdt == NULL)
+		sys_exit(-1);
+	for (size_t i = 0; i < FD_MAX; i++)
+  		curr->fdt[i] = NULL;
 }
 
 /* "initd"라 불리는 첫 사용자 프로그램을 실행한다.
