@@ -308,6 +308,10 @@ process_exit (void) {
 			curr->fdt[i] = NULL;
 		}
 	}
+
+	/* FDT 정리 */
+	palloc_free_page(curr->fdt);
+	curr->fdt = NULL;
 	
 	 /* 부모에게 작업 종료 안내 */ 
 	sema_up(&curr->wait_sema);
@@ -340,7 +344,7 @@ process_cleanup (void) {
                  * 디렉터리를 사용하게 된다. */
 		curr->pml4 = NULL;
 		pml4_activate (NULL);
-		pml4_destroy (pml4);
+		pml4_destroy (pml4);		
 	}
 }
 

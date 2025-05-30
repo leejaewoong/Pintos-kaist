@@ -1,0 +1,12 @@
+Kernel command line: -q -f put create-exists run create-exists
+Kernel PANIC at ../../threads/thread.c:474 in thread_current(): assertion `t->status == THREAD_RUNNING' failed.
+Call stack: 0x8004217fbe 0x80042073a1 0x800420a517 0x800420b6cd 0x800420b7d1 0x80042078de 0x8004206ac2 0x8004206068.
+The `backtrace' program can make call stacks useful.
+Read "Backtraces" in the "Debugging Tools" chapter
+of the Pintos documentation for more information.
+Timer: 0 ticks
+Thread: 0 idle ticks, 0 kernel ticks, 0 user ticks
+Console: 512 characters output
+Keyboard: 0 keys pressed
+Exception: 0 page faults
+Powering off...
