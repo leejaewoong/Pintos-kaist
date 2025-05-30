@@ -180,7 +180,9 @@ __do_fork (void *aux) {
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
 	
-	/* 부모 스레드의 FDT를 순회하며 파일을 복사 후 자녀 스레드의 FDT에 저장 */	
+	process_init ();	
+	
+	 /* 부모 스레드의 FDT를 순회하며 파일을 복사 후 자녀 스레드의 FDT에 저장 */	
 	for(int i = 3; i < FD_MAX; i++)
 	{
 		if(parent->fdt[i] != NULL)		
@@ -194,9 +196,7 @@ __do_fork (void *aux) {
 	curr->next_fd = parent->next_fd;
 
 	/* 부모 스레드의 데이터 복제 후 부모 스레드 block 해제 */
-	sema_up(&curr->load_sema);
-
-	process_init ();	
+	sema_up(&curr->load_sema);	
 
         /* 마지막으로 새로 생성한 프로세스로 전환한다. */
 	if (succ)
