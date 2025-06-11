@@ -198,29 +198,26 @@ vm_evict_frame(void)
 static struct frame *
 vm_get_frame(void)
 {
-	/* frame 구조체와 실제 물리 페이지를 준비한다. */
+	/* frame 구조체와 실제 물리 페이지를 준비한다. */	
 	struct frame *new_frame = malloc(sizeof(struct frame));
 	if (new_frame == NULL)
 		return NULL;
 
 	new_frame->kva = palloc_get_page(PAL_USER | PAL_ZERO);
-	if (new_frame->kva == NULL)
+	if (new_frame->kva == NULL)		
 	{
 		free(new_frame);
-		return NULL;
-	}
+		return NULL;	
+	}		
 
 	/* frame 구조체 초기 값 설정 */
 	new_frame->page = NULL;	
 
 	/* 할당받은 frame을 frame table에 삽입 */
-	enum intr_level old_level;
-	old_level = intr_disable ();	
+	enum intr_level old_level = intr_disable ();	
 	list_push_front(&frame_table, &new_frame->frame_elem);
 	intr_set_level (old_level);
-
-	ASSERT(new_frame != NULL);
-	ASSERT(new_frame->page == NULL);
+	
 	return new_frame;
 }
 
@@ -327,11 +324,12 @@ vm_do_claim_page(struct page *page)
 	/* 매핑할 frame 획득 */
 	struct frame *frame = vm_get_frame();
 
-	/* 매핑할 frame이 없으면 함수 종료 (추후 교체 로직 도입 필요)*/
+	/* 매핑할 frame이 없으면 frame 교체 */
 	if (frame == NULL)
 	{
-		vm_evict_frame();
-		vm_do_claim_page(page);
+		frame = vm_evict_frame();
+			if(frame == NULL)
+				return false;
 	}
 		
 
