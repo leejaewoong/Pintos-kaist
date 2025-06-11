@@ -5,6 +5,7 @@
 
 /* 아래 줄부터는 수정하지 마세요. */
 static struct disk *swap_disk;
+static struct bitmap *swap_table;
 static bool anon_swap_in (struct page *page, void *kva);
 static bool anon_swap_out (struct page *page);
 static void anon_destroy (struct page *page);
@@ -19,9 +20,9 @@ static const struct page_operations anon_ops = {
 
 /* anonymous page 관련 데이터를 초기화합니다. */
 void
-vm_anon_init (void) {
-	/* TODO: swap_disk를 설정해야 합니다. */
+vm_anon_init (void) {	
 	swap_disk = disk_get(1,1);		
+	swap_table = bitmap_create_in_buf (1000, swap_disk, PGSIZE);	
 }
 
 /* 파일 매핑을 초기화합니다. */
@@ -41,12 +42,30 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 static bool
 anon_swap_in (struct page *page, void *kva) {
 	struct anon_page *anon_page = &page->anon;
+	
+	/* swap_table 업데이트 */
+	bitmap_flip (swap_table, page->anon.swap_idx);
+
+	/* page의 swap_idx 초기화 */
+	anon_page->swap_idx = -1;
 }
 
 /* 페이지 내용을 swap 영역에 기록하여 내보냅니다. */
 static bool
 anon_swap_out (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
+
+	/* 할당 가능한 스왑 슬롯 획득 */
+	size_t swap_idx = bitmap_scan(swap_table, 0, 1, false);
+
+	/* victim 페이지에 swap_idx 업데이트 */
+	page->anon.swap_idx = swap_idx;
+
+	/* victim 페이지를 swap disk에 저장 */
+	disk_write(swap_disk, swap_idx, page->va);
+
+	/* swap_table 업데이트 */
+	bitmap_flip (swap_table, swap_idx);
 }
 
 /* anonymous page를 파괴합니다. PAGE는 호출자가 해제합니다. */

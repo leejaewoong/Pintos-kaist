@@ -157,23 +157,19 @@ static struct frame *
 vm_get_victim(void)
 {
 	struct frame *victim = NULL;
-
 	struct thread *curr = thread_current();
 	uint64_t curr_pml4 = curr->pml4;
 
-	/* TODO: 어떤 프레임을 제거할지는 구현하기 나름입니다. */
 	for (struct list_elem *i = &frame_table.head ; ; i = i->next)
 	{
 		victim = list_entry(i, struct frame, frame_elem);
 		void *upage = victim->page->va;
+
 		if (pml4_is_accessed (curr_pml4, upage))
-		{
 			pml4_set_accessed (curr_pml4, upage, false);
-		}
+		
 		else
-		{
-			return victim;
-		}
+			return victim;		
 	}
 	
 	NOT_REACHED();
@@ -185,16 +181,14 @@ vm_get_victim(void)
 static struct frame *
 vm_evict_frame(void)
 {
-	struct frame *victim UNUSED = vm_get_victim();
+	struct frame *alternative UNUSED = vm_get_victim();
 	/* TODO: victim을 swap 영역으로 내보내고, 그 프레임을 반환하세요. */
 
-	enum vm_type type = victim->page->operations->type;
-	if (VM_TYPE(type) == VM_FILE)
-	{
-		file_backed_destroy(&victim->page);
-	}
+	enum vm_type type = alternative->page->operations->type;
 
-
+	if(swap_out(alternative->page))
+		return alternative;
+	
 	return NULL;
 }
 
@@ -204,7 +198,6 @@ vm_evict_frame(void)
 static struct frame *
 vm_get_frame(void)
 {
-
 	/* frame 구조체와 실제 물리 페이지를 준비한다. */
 	struct frame *new_frame = malloc(sizeof(struct frame));
 	if (new_frame == NULL)
@@ -218,12 +211,13 @@ vm_get_frame(void)
 	}
 
 	/* frame 구조체 초기 값 설정 */
-	new_frame->page = NULL;
-
-	/* 할당할 frame이 없으면 교체 로직 호출(추가 구현) */
+	new_frame->page = NULL;	
 
 	/* 할당받은 frame을 frame table에 삽입 */
+	enum intr_level old_level;
+	old_level = intr_disable ();	
 	list_push_front(&frame_table, &new_frame->frame_elem);
+	intr_set_level (old_level);
 
 	ASSERT(new_frame != NULL);
 	ASSERT(new_frame->page == NULL);
@@ -335,7 +329,11 @@ vm_do_claim_page(struct page *page)
 
 	/* 매핑할 frame이 없으면 함수 종료 (추후 교체 로직 도입 필요)*/
 	if (frame == NULL)
-		return false;
+	{
+		vm_evict_frame();
+		vm_do_claim_page(page);
+	}
+		
 
 	/* page와 frame의 상호 참조 */
 	frame->page = page;

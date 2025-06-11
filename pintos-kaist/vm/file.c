@@ -46,7 +46,7 @@ file_backed_swap_in (struct page *page, void *kva) {
 /* 페이지의 내용을 파일에 기록하여 내보냅니다. */
 static bool
 file_backed_swap_out (struct page *page) {
-	struct file_page *file_page UNUSED = &page->file;
+	file_backed_destroy(page);
 }
 
 /* 파일 기반 페이지를 파괴합니다. PAGE는 호출자가 해제합니다. */
