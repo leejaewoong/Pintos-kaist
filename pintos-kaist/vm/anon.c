@@ -43,11 +43,16 @@ static bool
 anon_swap_in (struct page *page, void *kva) {
 	struct anon_page *anon_page = &page->anon;
 	
+	/* swap된 데이터를 메모리에 로드 */
+	disk_read(swap_disk, page->anon.swap_idx, kva);
+	
 	/* swap_table 업데이트 */
 	bitmap_flip (swap_table, page->anon.swap_idx);
 
 	/* page의 swap_idx 초기화 */
 	anon_page->swap_idx = -1;
+
+	return true;
 }
 
 /* 페이지 내용을 swap 영역에 기록하여 내보냅니다. */
@@ -66,6 +71,8 @@ anon_swap_out (struct page *page) {
 
 	/* swap_table 업데이트 */
 	bitmap_flip (swap_table, swap_idx);
+
+	return true;
 }
 
 /* anonymous page를 파괴합니다. PAGE는 호출자가 해제합니다. */

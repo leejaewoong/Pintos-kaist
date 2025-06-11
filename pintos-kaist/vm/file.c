@@ -41,12 +41,17 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 bool
 file_backed_swap_in (struct page *page, void *kva) {
 	struct file_page *file_page UNUSED = &page->file;
+
+	/* swap된 파일을 메모리에 로드 */
+	if(file_read_at(file_page->aux->file, kva, file_page->aux->page_read_bytes, file_page->aux->ofs))
+		return true;
 }
 
 /* 페이지의 내용을 파일에 기록하여 내보냅니다. */
 static bool
 file_backed_swap_out (struct page *page) {
 	file_backed_destroy(page);
+	return true;
 }
 
 /* 파일 기반 페이지를 파괴합니다. PAGE는 호출자가 해제합니다. */
