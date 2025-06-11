@@ -21,8 +21,12 @@ static const struct page_operations anon_ops = {
 /* anonymous page 관련 데이터를 초기화합니다. */
 void
 vm_anon_init (void) {	
+	/* 스왑 디스크 할당 */	
 	swap_disk = disk_get(1,1);		
-	swap_table = bitmap_create_in_buf (1000, swap_disk, PGSIZE);	
+
+	/* 스왑 슬롯 개수 계산 후 비트맵 생성 */
+	size_t swap_size = disk_size(swap_disk) / (PGSIZE / DISK_SECTOR_SIZE);
+	swap_table = bitmap_create(swap_size);	
 }
 
 /* 파일 매핑을 초기화합니다. */
@@ -42,15 +46,20 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 static bool
 anon_swap_in (struct page *page, void *kva) {
 	struct anon_page *anon_page = &page->anon;
+	size_t idx = anon_page->swap_idx;
+
+	if (idx == -1)
+		return false;
 	
 	/* swap된 데이터를 메모리에 로드 */
-	disk_read(swap_disk, page->anon.swap_idx, kva);
+	for (size_t i = 0; i < PGSIZE / DISK_SECTOR_SIZE; i++)
+		disk_read(swap_disk, idx * (PGSIZE / DISK_SECTOR_SIZE) + i, kva + DISK_SECTOR_SIZE * i);
 	
 	/* swap_table 업데이트 */
-	bitmap_flip (swap_table, page->anon.swap_idx);
+	bitmap_reset (swap_table, idx);
 
 	/* page의 swap_idx 초기화 */
-	anon_page->swap_idx = -1;
+	idx = -1;
 
 	return true;
 }
@@ -59,18 +68,30 @@ anon_swap_in (struct page *page, void *kva) {
 static bool
 anon_swap_out (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
+	struct frame *frame = page->frame;
 
 	/* 할당 가능한 스왑 슬롯 획득 */
 	size_t swap_idx = bitmap_scan(swap_table, 0, 1, false);
 
-	/* victim 페이지에 swap_idx 업데이트 */
-	page->anon.swap_idx = swap_idx;
-
 	/* victim 페이지를 swap disk에 저장 */
-	disk_write(swap_disk, swap_idx, page->va);
+	for (size_t i = 0; i < PGSIZE / DISK_SECTOR_SIZE; i++)
+		disk_write(swap_disk, swap_idx * (PGSIZE / DISK_SECTOR_SIZE) + i, frame->kva + DISK_SECTOR_SIZE * i);
 
 	/* swap_table 업데이트 */
-	bitmap_flip (swap_table, swap_idx);
+	bitmap_set (swap_table, swap_idx, true);
+	
+	/* victim 페이지에 swap_idx 업데이트 */
+	page->anon.swap_idx = swap_idx;	
+
+	/* 페이지 매핑 해제 및 자원 반환 */
+	enum intr_level old_level = intr_disable();
+	list_remove(&frame->frame_elem);
+	intr_set_level(old_level);
+
+	pml4_clear_page(thread_current()->pml4, page->va);
+	palloc_free_page(frame->kva);
+	free(frame);
+	page->frame = NULL;
 
 	return true;
 }
@@ -78,24 +99,27 @@ anon_swap_out (struct page *page) {
 /* anonymous page를 파괴합니다. PAGE는 호출자가 해제합니다. */
 static void
 anon_destroy (struct page *page) {
-	struct frame *target_frame = page->frame;
+	struct frame *target = page->frame;
 	struct thread *curr = thread_current();
 	struct anon_page *anon_page = &page->anon;	
 
 	/* frame table에서 제거 */
-	enum intr_level old_level = intr_disable ();	
-	list_remove(&target_frame->frame_elem);
-	intr_set_level (old_level);
+	if (page->frame != NULL) {
+		enum intr_level old_level = intr_disable ();	
+		list_remove(&target->frame_elem);
+		intr_set_level(old_level);
+
+		/* pml4에서 페이지 매핑 제거 (VA -> PA 연결 해제) */
+		pml4_clear_page(curr->pml4, page->va);
+
+		/* 자원 해제 */        
+		palloc_free_page(target->kva);
+		free(target);
+		page->frame = NULL;	
+	}
 
 	/* swap된 페이지만 비트맵의 슬롯 업데이트 */
-	if (anon_page->swap_idx > -1)
+	if (anon_page->swap_idx != -1)
 		bitmap_reset(swap_table, anon_page->swap_idx);	
-
-	/* pml4에서 페이지 매핑 제거 (VA -> PA 연결 해제) */
-	pml4_clear_page(curr->pml4, page->va);
-
-	/* 자원 해제 */        
-	palloc_free_page(target_frame->kva);
-	free(target_frame);
-	page->frame = NULL;	
+	
 }

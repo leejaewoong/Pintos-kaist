@@ -40,11 +40,19 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 /* 파일에서 내용을 읽어 페이지를 불러옵니다. */
 bool
 file_backed_swap_in (struct page *page, void *kva) {
-	struct file_page *file_page UNUSED = &page->file;
+	struct file_page *file_page = &page->file;
 
 	/* swap된 파일을 메모리에 로드 */
-	if(file_read_at(file_page->aux->file, kva, file_page->aux->page_read_bytes, file_page->aux->ofs))
-		return true;
+	if (file_read_at(file_page->aux->file, kva, 
+		file_page->aux->page_read_bytes,
+		file_page->aux->ofs) != file_page->aux->page_read_bytes)
+		return false;
+	
+	/* 남은 부분을 O으로 세팅 */
+	memset(kva + file_page->aux->page_read_bytes, 0,
+		file_page->aux->page_zero_bytes);
+
+	return true;
 }
 
 /* 페이지의 내용을 파일에 기록하여 내보냅니다. */
@@ -67,7 +75,7 @@ file_backed_destroy (struct page *page) {
 		/* 파일이 수정된 경우 write-back */
 		if (pml4_is_dirty(curr->pml4, page->va)) 
         {
-            file_write_at(aux->file, page->va, aux->page_read_bytes, aux->ofs);
+            file_write_at(aux->file, target_frame->kva, aux->page_read_bytes, aux->ofs);
             pml4_set_dirty(curr->pml4, page->va, false);
         }
 		

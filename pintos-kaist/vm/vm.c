@@ -155,22 +155,24 @@ vm_get_victim(void)
 	struct thread *curr = thread_current();
 	uint64_t curr_pml4 = curr->pml4;
 
-	for (struct list_elem *i = list_begin(&frame_table); ; i = list_next(i))
+	struct list_elem *e = list_begin(&frame_table);
+
+	while (!list_empty(&frame_table))
 	{
-		victim = list_entry(i, struct frame, frame_elem);
+		if (e == list_end(&frame_table))
+			e = list_begin(&frame_table);
+
+		victim = list_entry(e, struct frame, frame_elem);
 		void *upage = victim->page->va;
 
-		bool is_accessed = pml4_is_accessed (curr_pml4, upage);
-
-		if (is_accessed)
-			pml4_set_accessed (curr_pml4, upage, false);
-
+		if (pml4_is_accessed(curr_pml4, upage))
+		{
+			pml4_set_accessed(curr_pml4, upage, false);
+			e = list_next(e);
+		}
 		else
-			return victim;		
-
-		if (i == list_end(&frame_table))
-			i = list_begin(&frame_table);				
-	}
+			return victim;
+       }
 	
 	NOT_REACHED();
 	return NULL;
@@ -181,20 +183,15 @@ vm_get_victim(void)
 static struct frame *
 vm_evict_frame(void)
 {
-	struct frame *alternative = vm_get_victim();
+	struct frame *victim = vm_get_victim();
 
-	if (alternative == NULL)
+	if (victim == NULL)
 		return NULL;
 
-	enum vm_type type = alternative->page->operations->type;
-
-	if(swap_out(alternative->page))
-	{
-		alternative = vm_get_frame();
-		return alternative;
-	}	
+	if(!swap_out(victim->page))
+		return NULL;
 	
-	return NULL;
+	return vm_get_frame();
 }
 
 /* palloc()을 이용해 프레임을 얻습니다. 남는 프레임이 없다면 하나를
@@ -211,14 +208,10 @@ vm_get_frame(void)
 	new_frame->kva = palloc_get_page(PAL_USER | PAL_ZERO);
 	if (new_frame->kva == NULL)		
 	{	
-		new_frame = vm_evict_frame();
-			if(new_frame == NULL)
-			{
-				free(new_frame);
-				return NULL;	
-			}		
+		free(new_frame);
+		return vm_evict_frame();
 	}		
-
+	
 	/* frame 구조체 초기 값 설정 */
 	new_frame->page = NULL;	
 
@@ -255,18 +248,6 @@ vm_handle_wp(struct page *page UNUSED)
 bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 						 bool user UNUSED, bool write UNUSED, bool not_present UNUSED)
 {
-
-	/* 페이지 폴트 유형
-	 * 0. 잘못된 주소 접근 (미할당 주소)
-	 * 1. Lazy_Loading
-	 * 2. 스왑 아웃된 상태
-	 * 3. 쓰기 권한 에러
-	 * 4. 커널 주소 접근 */
-
-	/* 쓰기 권한 에러, 또는 커널 주소 접근이면 함수 종료 */
-	// if(write == true || user == false)
-	// 	return false;
-
 	struct thread *curr = thread_current();
 	struct supplemental_page_table *spt UNUSED = &curr->spt;
 	struct page *page = NULL;
@@ -277,9 +258,6 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 		rsp = f->rsp;
 	else
 		rsp = curr->stk_rsp;	
-	
-	/* 스왑-아웃된 상태면 스왑-인 (추후 구현) */
-
 
 	/* 페이지 폴트를 일으킨 va를 가지고 spt에서 page 탐색 */
 	page = spt_find_page(spt, addr);
@@ -296,9 +274,6 @@ bool vm_try_handle_fault(struct intr_frame *f UNUSED, void *addr UNUSED,
 		else
 			return false;
 	}
-
-	// if (write && !page->writable) // !!!!!!!!!!!!!!!!!!!!!!!!!!
-	// 	return false;			  // 쓰기 권한이 없는 페이지에 write 접근
 
 	return vm_do_claim_page(page);
 }
