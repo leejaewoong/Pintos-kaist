@@ -20,12 +20,7 @@ void vm_init(void)
 	register_inspect_intr();
 	/* 위의 줄은 수정하지 마세요. */
 	/* TODO: 여기에 코드를 작성하세요. */
-	/* frame table 초기화 */
-	ASSERT (&frame_table != NULL);
-	frame_table.head.prev = &frame_table.tail;
-	frame_table.head.next = &frame_table.tail;
-	frame_table.tail.prev = &frame_table.head;
-	frame_table.tail.next = &frame_table.head;
+	/* frame table 초기화 */	
 }
 
 /* 페이지의 유형을 얻습니다. 초기화된 이후에 어떤 타입이 될지
@@ -160,16 +155,21 @@ vm_get_victim(void)
 	struct thread *curr = thread_current();
 	uint64_t curr_pml4 = curr->pml4;
 
-	for (struct list_elem *i = &frame_table.head ; ; i = i->next)
+	for (struct list_elem *i = list_begin(&frame_table); ; i = list_next(i))
 	{
 		victim = list_entry(i, struct frame, frame_elem);
 		void *upage = victim->page->va;
 
-		if (pml4_is_accessed (curr_pml4, upage))
+		bool is_accessed = pml4_is_accessed (curr_pml4, upage);
+
+		if (is_accessed)
 			pml4_set_accessed (curr_pml4, upage, false);
-		
+
 		else
 			return victim;		
+
+		if (i == list_end(&frame_table))
+			i = list_begin(&frame_table);				
 	}
 	
 	NOT_REACHED();
@@ -181,13 +181,18 @@ vm_get_victim(void)
 static struct frame *
 vm_evict_frame(void)
 {
-	struct frame *alternative UNUSED = vm_get_victim();
-	/* TODO: victim을 swap 영역으로 내보내고, 그 프레임을 반환하세요. */
+	struct frame *alternative = vm_get_victim();
+
+	if (alternative == NULL)
+		return NULL;
 
 	enum vm_type type = alternative->page->operations->type;
 
 	if(swap_out(alternative->page))
+	{
+		alternative = vm_get_frame();
 		return alternative;
+	}	
 	
 	return NULL;
 }
@@ -205,9 +210,13 @@ vm_get_frame(void)
 
 	new_frame->kva = palloc_get_page(PAL_USER | PAL_ZERO);
 	if (new_frame->kva == NULL)		
-	{
-		free(new_frame);
-		return NULL;	
+	{	
+		new_frame = vm_evict_frame();
+			if(new_frame == NULL)
+			{
+				free(new_frame);
+				return NULL;	
+			}		
 	}		
 
 	/* frame 구조체 초기 값 설정 */
@@ -322,16 +331,7 @@ static bool
 vm_do_claim_page(struct page *page)
 {
 	/* 매핑할 frame 획득 */
-	struct frame *frame = vm_get_frame();
-
-	/* 매핑할 frame이 없으면 frame 교체 */
-	if (frame == NULL)
-	{
-		frame = vm_evict_frame();
-			if(frame == NULL)
-				return false;
-	}
-		
+	struct frame *frame = vm_get_frame();		
 
 	/* page와 frame의 상호 참조 */
 	frame->page = page;

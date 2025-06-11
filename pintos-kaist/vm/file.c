@@ -17,7 +17,7 @@ static const struct page_operations file_ops = {
 /* file VM을 초기화합니다. */
 void
 vm_file_init (void) {
-	
+	list_init(&frame_table);	
 }
 
 /* 파일 기반 페이지를 초기화합니다. */
@@ -70,10 +70,16 @@ file_backed_destroy (struct page *page) {
             file_write_at(aux->file, page->va, aux->page_read_bytes, aux->ofs);
             pml4_set_dirty(curr->pml4, page->va, false);
         }
-
-		/* 자원 해제 */
-        list_remove(&target_frame->frame_elem);
+		
+		/* frame table에서 제거 */
+		enum intr_level old_level = intr_disable ();	
+		list_remove(&target_frame->frame_elem);
+		intr_set_level (old_level);
+        
+		/* pml4에서 페이지 매핑 제거 (VA -> PA 연결 해제) */
         pml4_clear_page(curr->pml4, page->va);
+		
+		/* 자원 해제 */		
         palloc_free_page(target_frame->kva);
         free(target_frame);
         page->frame = NULL;

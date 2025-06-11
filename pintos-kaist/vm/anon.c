@@ -78,5 +78,24 @@ anon_swap_out (struct page *page) {
 /* anonymous page를 파괴합니다. PAGE는 호출자가 해제합니다. */
 static void
 anon_destroy (struct page *page) {
-	struct anon_page *anon_page = &page->anon;
+	struct frame *target_frame = page->frame;
+	struct thread *curr = thread_current();
+	struct anon_page *anon_page = &page->anon;	
+
+	/* frame table에서 제거 */
+	enum intr_level old_level = intr_disable ();	
+	list_remove(&target_frame->frame_elem);
+	intr_set_level (old_level);
+
+	/* swap된 페이지만 비트맵의 슬롯 업데이트 */
+	if (anon_page->swap_idx > -1)
+		bitmap_reset(swap_table, anon_page->swap_idx);	
+
+	/* pml4에서 페이지 매핑 제거 (VA -> PA 연결 해제) */
+	pml4_clear_page(curr->pml4, page->va);
+
+	/* 자원 해제 */        
+	palloc_free_page(target_frame->kva);
+	free(target_frame);
+	page->frame = NULL;	
 }

@@ -121,5 +121,6 @@ enum vm_type page_get_type (struct page *page);
 uint64_t get_hash (const struct hash_elem *e, void *aux);
 bool cmp_page (const struct hash_elem *a, const struct hash_elem *b, void *aux);
 static void vm_stack_growth (void *addr);
+static struct frame *vm_get_frame(void);
 
 #endif  /* VM_VM_H */
